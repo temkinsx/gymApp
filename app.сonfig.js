@@ -1,5 +1,3 @@
-import 'dotenv/config';
-
 export default {
   expo: {
     name: "Praktika",
@@ -8,7 +6,6 @@ export default {
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
-    newArchEnabled: true,
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -26,9 +23,6 @@ export default {
     },
     web: {
       favicon: "./assets/favicon.png"
-    },
-    extra: {
-      API_URL: process.env.API_URL
     }
   }
 };

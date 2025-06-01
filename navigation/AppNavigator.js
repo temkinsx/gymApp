@@ -11,7 +11,6 @@ const RegisterPassportScreen = React.lazy(() => import('../screens/RegisterPassp
 const HomeScreen = React.lazy(() => import('../screens/HomeScreen'));
 const ScheduleScreen = React.lazy(() => import('../screens/ScheduleScreen'));
 const ProfileScreen = React.lazy(() => import('../screens/ProfileScreen'));
-const SubscriptionScreen = React.lazy(() => import('../screens/SubscriptionScreen'));
 const PaymentScreen = React.lazy(() => import('../screens/PaymentScreen'));
 
 const Tab = createBottomTabNavigator();
@@ -53,7 +52,6 @@ export default function AppNavigator() {
                     <Stack.Screen name="RegisterName" component={RegisterNameScreen} options={{ title: 'Ваши данные' }} />
                     <Stack.Screen name="RegisterPassport" component={RegisterPassportScreen} options={{ title: 'Паспорт' }} />
                     <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
-                    <Stack.Screen name="Подписка" component={SubscriptionScreen} options={{ title: 'Подписка' }} />
                     <Stack.Screen name="Оплата" component={PaymentScreen} options={{ title: 'Оплата' }} />
                 </Stack.Navigator>
             </Suspense>

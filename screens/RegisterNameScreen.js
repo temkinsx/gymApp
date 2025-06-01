@@ -1,6 +1,6 @@
 import { API_URL } from '@env';
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { KeyboardAvoidingView, View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -10,6 +10,11 @@ export default function RegisterNameScreen() {
     const [patronymic, setPatronymic] = useState('');
     const [birthYear, setBirthYear] = useState('');
     const navigation = useNavigation();
+
+    const surnameRef = useRef();
+    const nameRef = useRef();
+    const patronymicRef = useRef();
+    const birthYearRef = useRef();
 
     const capitalize = (text) => {
         return text.length === 0 ? '' : text[0].toLocaleUpperCase('ru-RU') + text.slice(1).toLocaleLowerCase('ru-RU');
@@ -37,33 +42,70 @@ export default function RegisterNameScreen() {
                 const [day, month, year] = birthYear.split('.');
                 const formattedDate = `${year}-${month}-${day}`;
 
+                const requestData = {
+                    phoneNumber,
+                    name,
+                    surname,
+                    patronymic,
+                    birthDate: formattedDate
+                };
+
+                console.log('Sending request to:', `${API_URL}/api/users/update-name`);
+                console.log('Request data:', requestData);
+
                 const response = await fetch(`${API_URL}/api/users/update-name`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        phoneNumber,
-                        name,
-                        surname,
-                        patronymic,
-                        birthDate: formattedDate
-                    }),
+                    body: JSON.stringify(requestData),
                 });
 
+                console.log('Response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+                // Получаем текст ответа для детального анализа
+                const responseText = await response.text();
+                console.log('Response text:', responseText);
+
                 if (!response.ok) {
-                    throw new Error('Ошибка при сохранении данных');
+                    let errorMessage = 'Ошибка при сохранении данных';
+                    try {
+                        const errorData = JSON.parse(responseText);
+                        errorMessage = errorData.message || errorMessage;
+                        console.log('Parsed error:', errorData);
+                    } catch (parseError) {
+                        console.log('Could not parse error response as JSON:', parseError);
+                        errorMessage = responseText || errorMessage;
+                    }
+                    throw new Error(`HTTP ${response.status}: ${errorMessage}`);
                 }
 
-                const data = await response.json();
-                // при необходимости: сохранить userId в AsyncStorage или Context
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                    console.log('Success response:', data);
+                } catch (parseError) {
+                    console.log('Could not parse success response as JSON:', parseError);
+                    throw new Error('Получен некорректный ответ от сервера');
+                }
 
                 navigation.navigate('RegisterPassport');
             } catch (error) {
-                console.error(error);
-                alert('Ошибка при подключении к серверу');
+                console.error('Full error details:', error);
+                console.error('Error name:', error.name);
+                console.error('Error message:', error.message);
+                console.error('Error stack:', error.stack);
+
+                // Показываем более детальную ошибку пользователю
+                alert(`Ошибка: ${error.message}`);
             }
         } else {
+            console.log('Validation failed:', {
+                name: !!name,
+                surname: !!surname,
+                birthYearLength: birthYear.length
+            });
             alert('Заполните все поля корректно');
         }
     };
@@ -71,42 +113,62 @@ export default function RegisterNameScreen() {
     return (
         <View style={styles.container}>
             <Text style={styles.title}>Введите ФИО и год рождения</Text>
+            <KeyboardAvoidingView
+                style={styles.formContainer}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
+                <TextInput
+                    ref={surnameRef}
+                    placeholder="Фамилия"
+                    placeholderTextColor="rgba(0,0,0,0.5)"
+                    value={surname}
+                    onChangeText={setSurname}
+                    onBlur={() => setSurname(capitalize(surname))}
+                    style={styles.input}
+                    returnKeyType="next"
+                    onSubmitEditing={() => nameRef.current.focus()}
+                />
+                <TextInput
+                    ref={nameRef}
+                    placeholder="Имя"
+                    placeholderTextColor="rgba(0,0,0,0.5)"
+                    value={name}
+                    onChangeText={setName}
+                    onBlur={() => setName(capitalize(name))}
+                    style={styles.input}
+                    returnKeyType="next"
+                    onSubmitEditing={() => patronymicRef.current.focus()}
+                />
+                <TextInput
+                    ref={patronymicRef}
+                    placeholder="Отчество (необязательно)"
+                    placeholderTextColor="rgba(0,0,0,0.5)"
+                    value={patronymic}
+                    onChangeText={setPatronymic}
+                    onBlur={() => setPatronymic(capitalize(patronymic))}
+                    style={styles.input}
+                    returnKeyType="next"
+                    onSubmitEditing={() => birthYearRef.current.focus()}
+                />
+                <TextInput
+                    ref={birthYearRef}
+                    placeholder="Дата рождения"
+                    placeholderTextColor="rgba(0,0,0,0.5)"
+                    value={birthYear}
+                    onChangeText={(text) => {
+                        setBirthYear(formatDate(text));
+                    }}
+                    onBlur={() => setBirthYear(formatDate(birthYear))}
+                    keyboardType="numeric"
+                    style={styles.input}
+                    returnKeyType="done"
+                    onSubmitEditing={handleNext}
+                />
 
-            <TextInput
-                placeholder="Фамилия"
-                value={surname}
-                onChangeText={setSurname}
-                onBlur={() => setSurname(capitalize(surname))}
-                style={styles.input}
-            />
-            <TextInput
-                placeholder="Имя"
-                value={name}
-                onChangeText={setName}
-                onBlur={() => setName(capitalize(name))}
-                style={styles.input}
-            />
-            <TextInput
-                placeholder="Отчество (необязательно)"
-                value={patronymic}
-                onChangeText={setPatronymic}
-                onBlur={() => setPatronymic(capitalize(patronymic))}
-                style={styles.input}
-            />
-            <TextInput
-                placeholder="Дата рождения"
-                value={birthYear}
-                onChangeText={(text) => {
-                    setBirthYear(formatDate(text));
-                }}
-                onBlur={() => setBirthYear(formatDate(birthYear))}
-                keyboardType="numeric"
-                style={styles.input}
-            />
-
-            <TouchableOpacity style={styles.button} onPress={handleNext}>
-                <Text style={styles.buttonText}>Далее</Text>
-            </TouchableOpacity>
+                <TouchableOpacity style={styles.button} onPress={handleNext}>
+                    <Text style={styles.buttonText}>Далее</Text>
+                </TouchableOpacity>
+            </KeyboardAvoidingView>
         </View>
     );
 }
@@ -114,6 +176,9 @@ export default function RegisterNameScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, padding: 32, justifyContent: 'center', backgroundColor: '#fff' },
     title: { fontSize: 22, textAlign: 'center', marginBottom: 20 },
+    formContainer: {
+        flexGrow: 1,
+    },
     input: {
         borderWidth: 1, borderColor: '#ccc', padding: 12,
         borderRadius: 8, marginBottom: 15, fontSize: 16

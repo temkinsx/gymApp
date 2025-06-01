@@ -1,19 +1,25 @@
-import * as ImagePicker from 'expo-image-picker';
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, TouchableWithoutFeedback, Alert, Image, Modal, Pressable } from 'react-native';
+import { View, KeyboardAvoidingView, Platform, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, TouchableWithoutFeedback, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { API_URL } from '@env';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RegisterPassportScreen() {
+    const [phoneNumber, setPhoneNumber] = useState('');
     const [series, setSeries] = useState('');
     const [number, setNumber] = useState('');
     const [issueDate, setIssueDate] = useState('');
     const [deptCode, setDeptCode] = useState('');
     const [address, setAddress] = useState('');
     const [suggestions, setSuggestions] = useState([]);
-    const [photo, setPhoto] = useState(null);
-    const [previewVisible, setPreviewVisible] = useState(false);
     const navigation = useNavigation();
+
+    useEffect(() => {
+      (async () => {
+        const storedPhone = await AsyncStorage.getItem('phoneNumber');
+        setPhoneNumber(storedPhone || '');
+      })();
+    }, []);
 
     const fetchSuggestions = async (query) => {
       if (!query) return setSuggestions([]);
@@ -34,91 +40,125 @@ export default function RegisterPassportScreen() {
       }
     };
 
-    const handleAttachPhoto = async () => {
-      const options = ['Сделать фото', 'Выбрать из галереи', 'Отмена'];
-      const cancelButtonIndex = 2;
-
-      const choice = await new Promise((resolve) => {
-        Alert.alert(
-          'Прикрепить фото',
-          'Выберите источник',
-          [
-            { text: options[0], onPress: () => resolve('camera') },
-            { text: options[1], onPress: () => resolve('gallery') },
-            { text: options[2], style: 'cancel', onPress: () => resolve(null) },
-          ],
-          { cancelable: true }
-        );
-      });
-
-      if (choice === 'camera') {
-        const result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          quality: 0.5,
-        });
-        if (!result.canceled) {
-          setPhoto(result.assets[0].uri);
-        }
-      }
-
-      if (choice === 'gallery') {
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          quality: 0.5,
-        });
-        if (!result.canceled) {
-          setPhoto(result.assets[0].uri);
-        }
-      }
-    };
-
     const handleNext = async () => {
-        if (series.length === 4 && number.length === 6) {
-            const formData = new FormData();
-            formData.append('series', series);
-            formData.append('number', number);
-            formData.append('issueDate', issueDate);
-            formData.append('deptCode', deptCode);
-            formData.append('address', address);
-            if (photo) {
-                formData.append('passportPhoto', {
-                    uri: photo,
-                    type: 'image/jpeg',
-                    name: 'passport.jpg',
-                });
-            }
+        console.log('Raw issueDate input:', issueDate);
 
+        if (series.length === 4 && number.length === 6) {
             try {
-                const response = await fetch(`${API_URL}/api/user/passport`, {
+                // Валидация и форматирование даты
+                let formattedIssueDate = '';
+                if (!issueDate || issueDate.length !== 10) {
+                    throw new Error('Введите дату выдачи в формате ДД.ММ.ГГГГ');
+                }
+
+                // Проверяем формат даты
+                const dateRegex = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+                const match = issueDate.match(dateRegex);
+
+                if (!match) {
+                    throw new Error('Неверный формат даты. Используйте ДД.ММ.ГГГГ');
+                }
+
+                const [, day, month, year] = match;
+                const dayNum = parseInt(day);
+                const monthNum = parseInt(month);
+                const yearNum = parseInt(year);
+
+                console.log('Parsed date parts:', { day: dayNum, month: monthNum, year: yearNum });
+
+                // Валидация частей даты
+                if (dayNum < 1 || dayNum > 31) {
+                    throw new Error('День должен быть от 01 до 31');
+                }
+                if (monthNum < 1 || monthNum > 12) {
+                    throw new Error('Месяц должен быть от 01 до 12');
+                }
+                if (yearNum < 1950 || yearNum > 2030) {
+                    throw new Error('Год должен быть от 1950 до 2030');
+                }
+
+                // Дополнительная проверка валидности даты
+                const testDate = new Date(yearNum, monthNum - 1, dayNum);
+                if (testDate.getDate() !== dayNum ||
+                    testDate.getMonth() !== monthNum - 1 ||
+                    testDate.getFullYear() !== yearNum) {
+                    throw new Error('Такой даты не существует');
+                }
+
+                formattedIssueDate = `${year}-${month}-${day}`;
+                console.log('Valid formatted date:', formattedIssueDate);
+
+                const formData = new FormData();
+                formData.append('phoneNumber', phoneNumber);
+                formData.append('series', series);
+                formData.append('number', number);
+                formData.append('issueDate', formattedIssueDate);
+                formData.append('deptCode', deptCode);
+                formData.append('address', address);
+
+                console.log('Sending valid passport data:', {
+                    phoneNumber,
+                    series,
+                    number,
+                    issueDate: formattedIssueDate,
+                    deptCode,
+                    address
+                });
+
+                const response = await fetch(`${API_URL}/api/users/update-passport`, {
                     method: 'POST',
                     body: formData,
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                    },
                 });
 
+                console.log('Passport upload status:', response.status);
+                const responseText = await response.text();
+                console.log('Passport upload response:', responseText);
+
                 if (!response.ok) {
-                    throw new Error('Ошибка при отправке данных');
+                    let errorMessage = 'Ошибка при отправке данных';
+                    try {
+                        const errorData = JSON.parse(responseText);
+                        errorMessage = errorData.message || errorMessage;
+                    } catch (e) {
+                        errorMessage = responseText || errorMessage;
+                    }
+                    throw new Error(`HTTP ${response.status}: ${errorMessage}`);
                 }
+
+                const data = JSON.parse(responseText);
+                console.log('Passport update success:', data);
+                Alert.alert('Успешно', 'Паспортные данные сохранены', [
+                  { text: 'OK', onPress: () => navigation.navigate('MainTabs', { screen: 'Home' }) }
+                ]);
+                return;
             } catch (error) {
-                console.error('Ошибка отправки:', error);
-                alert('Не удалось отправить данные');
+                console.error('Ошибка:', error.message);
+                alert(error.message);
                 return;
             }
-            navigation.navigate('RegisterPhoto');
         } else {
-            alert('Введите корректные паспортные данные');
+            alert('Заполните все поля корректно:\n- Серия: 4 цифры\n- Номер: 6 цифр\n- Дата: ДД.ММ.ГГГГ');
         }
     };
 
     return (
         <View style={styles.container}>
             <Text style={styles.title}>Введите паспортные данные</Text>
-
+            <TextInput
+              placeholder="Телефон"
+              value={phoneNumber}
+              editable={false}
+              style={styles.input}
+              placeholderTextColor="rgba(0,0,0,0.5)"
+            />
+            <KeyboardAvoidingView
+              style={styles.formContainer}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 60}
+            >
             <TextInput
                 placeholder="Серия (4 цифры)"
+                placeholderTextColor="rgba(0,0,0,0.5)"
                 keyboardType="numeric"
                 value={series}
                 onChangeText={(text) => setSeries(text.replace(/\D/g, '').slice(0, 4))}
@@ -127,6 +167,7 @@ export default function RegisterPassportScreen() {
 
             <TextInput
                 placeholder="Номер (6 цифр)"
+                placeholderTextColor="rgba(0,0,0,0.5)"
                 keyboardType="numeric"
                 value={number}
                 onChangeText={(text) => setNumber(text.replace(/\D/g, '').slice(0, 6))}
@@ -135,6 +176,7 @@ export default function RegisterPassportScreen() {
 
             <TextInput
                 placeholder="Дата выдачи"
+                placeholderTextColor="rgba(0,0,0,0.5)"
                 value={issueDate}
                 onChangeText={(text) => {
                     const cleaned = text.replace(/\D/g, '').slice(0, 8);
@@ -152,6 +194,7 @@ export default function RegisterPassportScreen() {
 
             <TextInput
                 placeholder="Код подразделения"
+                placeholderTextColor="rgba(0,0,0,0.5)"
                 value={deptCode}
                 onChangeText={(text) => {
                     const cleaned = text.replace(/\D/g, '').slice(0, 6);
@@ -168,6 +211,7 @@ export default function RegisterPassportScreen() {
             <View style={styles.addressContainer}>
               <TextInput
                   placeholder="Адрес регистрации"
+                  placeholderTextColor="rgba(0,0,0,0.5)"
                   value={address}
                   onChangeText={(text) => {
                     setAddress(text);
@@ -192,35 +236,19 @@ export default function RegisterPassportScreen() {
               />
             </View>
 
-            <TouchableOpacity style={styles.photoButton} onPress={handleAttachPhoto}>
-              <Text style={styles.photoButtonText}>Прикрепить фото</Text>
-            </TouchableOpacity>
-            {photo && (
-      <>
-        <TouchableOpacity onPress={() => setPreviewVisible(true)} style={{ marginBottom: 10 }}>
-          <Image source={{ uri: photo }} style={{ width: 80, height: 80, borderRadius: 6 }} />
-        </TouchableOpacity>
-        <Modal visible={previewVisible} transparent={true}>
-          <View style={{
-            flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center'
-          }}>
-            <Pressable onPress={() => setPreviewVisible(false)} style={{ flex: 1, width: '100%' }}>
-              <Image source={{ uri: photo }} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />
-            </Pressable>
-          </View>
-        </Modal>
-      </>
-    )}
-
             <TouchableOpacity style={styles.button} onPress={handleNext}>
                 <Text style={styles.buttonText}>Отправить</Text>
             </TouchableOpacity>
+           </KeyboardAvoidingView>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 32, justifyContent: 'center', backgroundColor: '#f4f4f4' },
+    container: { flex: 1, padding: 32, justifyContent: 'flex-start', backgroundColor: '#fff' },
+    formContainer: {
+      flexGrow: 1,
+    },
     title: {
         fontSize: 22,
         textAlign: 'center',

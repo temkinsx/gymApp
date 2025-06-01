@@ -1,8 +1,7 @@
 import React, { useLayoutEffect, useEffect, useState } from 'react';
 import { API_URL } from '@env';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
@@ -13,6 +12,9 @@ const ProfileScreen = () => {
   const [subscription, setSubscription] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
+  const [userFullName, setUserFullName] = useState('');
+  const [subColor, setSubColor] = useState('#BDBDBD');
+  const [subscriptionTextColor, setSubscriptionTextColor] = useState('#000');
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -32,9 +34,23 @@ const ProfileScreen = () => {
         const user = response.data;
         if (!user) return;
 
-        const nameParts = user.fullName.split(' ');
-        setUserName(nameParts[1] || nameParts[0]); // Показываем только имя
+        const nameParts = user.fullName ? user.fullName.split(' ') : [];
+        setUserName(nameParts[1] || nameParts[0] || 'Пользователь');
+        setUserFullName(user.fullName || 'Имя не указано');
         setSubscription(user.subscription);
+
+        let subColor = '#f5f5f5'; // default
+        if (user.subscription?.plan === 'Pro') {
+          subColor = '#d1c4e9'; // фиолетовый
+          setSubscriptionTextColor('#000');
+        } else if (user.subscription?.plan === 'Medium') {
+          subColor = '#ffe082'; // жёлтый
+          setSubscriptionTextColor('#000');
+        } else if (user.subscription?.plan === 'Lite') {
+          subColor = '#d0f0c0'; // светло-зелёный
+          setSubscriptionTextColor('#000');
+        }
+        setSubColor(subColor);
       } catch (error) {
         console.error('Ошибка при получении данных пользователя:', error);
       } finally {
@@ -45,120 +61,286 @@ const ProfileScreen = () => {
     fetchUser();
   }, []);
 
+  const menuItems = [
+    {
+      id: 'subscription',
+      title: 'Управление подпиской',
+      icon: '💳',
+      onPress: () => navigation.navigate('Оплата'),
+    }
+  ];
+
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.profileHeader}>
-        <Image
-          source={require('../assets/avatar.png')}
-          style={styles.avatar}
-        />
-        <Text style={styles.userName}>{userName}</Text>
-      </View>
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        {!loading && subscription && (
-          <View style={styles.subscriptionContainer}>
-            <Ionicons name="card-outline" size={32} color="#43A047" style={{ marginBottom: 8 }} />
-            <Text style={styles.subscriptionTitle}>{subscription.plan} {subscription.duration}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-              <Ionicons name="checkmark-circle" size={20} color="#43A047" style={{ marginRight: 4 }} />
-              <Text style={{ color: '#43A047', fontSize: 13 }}>Активна</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="calendar-outline" size={18} color="#43A047" style={{ marginRight: 6 }} />
-              <Text style={styles.subscriptionDate}>Следующий платеж: {new Date(subscription.endDate).toLocaleDateString()}</Text>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerButton} />
+          <Text style={styles.headerTitle}>Профиль</Text>
+          <View style={styles.headerButton} />
+        </View>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Profile Header */}
+          <View style={styles.profileSection}>
+            <View style={styles.profileHeader}>
+              <Image
+                  source={require('../assets/avatar.png')}
+                  style={styles.avatar}
+              />
+              <View style={styles.profileInfo}>
+                <Text style={styles.userName}>{userName}</Text>
+                <Text style={styles.userFullName}>{userFullName}</Text>
+              </View>
             </View>
           </View>
-        )}
+
+          {/* Subscription Card */}
+          {!loading && subscription && (
+              <View style={styles.subscriptionSection}>
+                <Text style={styles.sectionTitle}>Подписка</Text>
+                <View style={[styles.subscriptionCard, { backgroundColor: subColor }]}>
+                  <View style={styles.cardHeader}>
+                    <Text style={[styles.cardTitle, { color: subscriptionTextColor }]}>
+                      {subscription.plan} {subscription.duration}
+                    </Text>
+                    <Text style={[styles.cardSubtitle, { color: subscriptionTextColor }]}>Активна</Text>
+                  </View>
+                  <View style={styles.cardFooter}>
+                    <Text style={styles.calendarIcon}>📅</Text>
+                    <Text style={[styles.cardFooterText, { color: subscriptionTextColor }]}>
+                      Следующий платеж: {new Date(subscription.endDate).toLocaleDateString()}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+          )}
+
+          {/* Menu Items */}
+          <View style={styles.menuSection}>
+            <Text style={styles.sectionTitle}>Меню</Text>
+            {menuItems.map((item) => (
+                <TouchableOpacity key={item.id} style={styles.menuItem} onPress={item.onPress}>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.menuIcon}>{item.icon}</Text>
+                    <Text style={styles.menuTitle}>{item.title}</Text>
+                  </View>
+                  <Text style={styles.menuArrow}>→</Text>
+                </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Support Button */}
+          <View style={styles.supportSection}>
+            <TouchableOpacity style={styles.supportButton}>
+              <Text style={styles.supportIcon}>💬</Text>
+              <Text style={styles.supportButtonText}>Служба поддержки</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        {/* Logout Button */}
+        <View style={styles.logoutSection}>
+          <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={async () => {
+                await AsyncStorage.clear();
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Start' }],
+                });
+              }}
+          >
+            <Text style={styles.logoutButtonText}>Выйти из аккаунта</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-
-      <TouchableOpacity style={styles.supportButton}>
-        <Text style={styles.supportButtonText}>Служба поддержки</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.logoutButton}
-        onPress={async () => {
-          await AsyncStorage.clear();
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Start' }],
-          });
-        }}
-      >
-        <Text style={styles.logoutButtonText}>Выйти из аккаунта</Text>
-      </TouchableOpacity>
-    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    justifyContent: 'space-between',
+    backgroundColor: '#f5f5f5',
   },
-  subscriptionContainer: {
-    marginTop: 0,
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 40,
-    paddingHorizontal: 24,
-    borderRadius: 16,
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 16,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  subscriptionTitle: {
+  headerButton: {
+    padding: 4,
+  },
+  headerIcon: {
+    fontSize: 20,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  profileSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginRight: 16,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  userName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#43A047',
-    marginBottom: 8,
+    color: '#333',
+    marginBottom: 4,
   },
-  subscriptionDate: {
+  userFullName: {
     fontSize: 14,
-    color: '#000',
+    color: '#666',
+  },
+  subscriptionSection: {
+    marginTop: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    paddingLeft: 4,
+  },
+  subscriptionCard: {
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardHeader: {
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  calendarIcon: {
+    fontSize: 16,
+    marginRight: 6,
+  },
+  cardFooterText: {
+    fontSize: 14,
+  },
+  menuSection: {
+    marginTop: 16,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  menuItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  menuIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  menuTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  menuArrow: {
+    fontSize: 16,
+    color: '#666',
+  },
+  supportSection: {
+    marginTop: 16,
+    marginBottom: 24,
   },
   supportButton: {
-    marginBottom: 30,
-    alignSelf: 'center',
-    backgroundColor: '#43A047',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  supportIcon: {
+    fontSize: 16,
+    marginRight: 8,
   },
   supportButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-  profileHeader: {
-    alignItems: 'center',
-    marginTop: 60,
-    marginBottom: 20,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 10,
-  },
-  userName: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 8,
+  logoutSection: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
   },
   logoutButton: {
-    marginBottom: 40,
-    alignSelf: 'center',
-    backgroundColor: '#fff',
-    borderColor: '#D32F2F',
     borderWidth: 1.5,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 25,
+    borderColor: '#D32F2F',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
   },
-
   logoutButtonText: {
     color: '#D32F2F',
     fontSize: 16,
